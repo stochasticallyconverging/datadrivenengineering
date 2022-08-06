@@ -1,9 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-plt.rcParams['figure.figsize'] = [16, 8]
-plt.rcParams.update({'font.size': 12})
-
 
 def plot_distance_from_identity(u: np.ndarray, relative: bool = True) -> None:
     errs = np.zeros((u.shape[1], 1))
