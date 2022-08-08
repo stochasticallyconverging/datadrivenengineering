@@ -46,6 +46,8 @@ class SVDErrorSimulator:
             self.lu_fit()
         elif method == "pinv":
             self.pinv_fit()
+        else:
+            raise ValueError("User did not choose valid fitting method.")
         self._compute_errs()
         self._plot_error_distribution(**kwargs)
 
