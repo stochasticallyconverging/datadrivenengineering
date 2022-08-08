@@ -16,55 +16,66 @@ class SVDErrorSimulator:
                  q: int = 0,
                  out_bitgen_method: Optional[Callable] = None,
                  eps_bitgen_method: Optional[Callable] = None):
+        self._A = A
         if not r:
-            r = A.shape[1]
+            r = self._A.shape[1]
         self._U = np.zeros((A.shape[0], r))
         self._S = np.zeros(r)
         self._VT = np.zeros((r, A.shape[0]))
+        self._iters = iters
         if randomized:
             self._rsvd(r=r, q=q, p=p)
-            self._U, self._S, self._VT = self.U[:, :(1+r)], self.S[:(1+r)], self.VT[:(1+r), :]
+            self._U, self._S, self._VT = self._U[:, :(1+r)], self._S[:(1+r)], self._VT[:(1+r), :]
         elif svd_method == "snapshot":
-            self._snapshotSVD()
-            self._U, self._S, self._VT = self.U[:, :(1+r)], self.S[:(1+r)], self.VT[:(1+r), :]
+            self._snapshot_svd()
+            self._U, self._S, self._VT = self._U[:, :(1+r)], self._S[:(1+r)], self._VT[:(1+r), :]
         else:
             self._U, self._S, self._VT = np.linalg.svd(A, full_matrices=False)
-            self._U, self._S, self._VT = self.U[:, :(1+r)], self.S[:(1+r)], self.VT[:(1+r), :]
-        self._A = A
-        self.A_reconstructed = self.U @ np.diag(self.S) @ self.VT
-        self._b_mat = np.zeros((A.shape[0], iters))
-        self.solutions = self._b_mat
+            self._U, self._S, self._VT = self._U[:, :(1+r)], self._S[:(1+r)], self._VT[:(1+r), :]
+        self.A_reconstructed = self._U @ np.diag(self._S) @ self._VT
         self._errs = np.zeros((iters, 1))
+        self._b_mat = None
         self._solved = False
-
+        self.solutions = None
         self._out_bitgen_method = out_bitgen_method if out_bitgen_method else None
-        self._eps_bitgen_method = eps_bitgen_method if eps_bitgen_method else out_bitgen_method
+        self._eps_bitgen_method = eps_bitgen_method if eps_bitgen_method else self.out_bitgen_method
 
-    def simulate(self, **kwargs):
-        self._gen_output_mat(self)
-        self.fit()
+    def simulate(self, method: str = "lu", **kwargs):
+        self._gen_output_mat()
+        if method == "lu":
+            self.lu_fit()
+        elif method == "pinv":
+            self.pinv_fit()
         self._compute_errs()
-        self._plot_error_distribution(kwargs)
+        self._plot_error_distribution(**kwargs)
 
-    def fit(self) -> None:
+    def lu_fit(self) -> None:
+        self.solutions = np.zeros((self._b_mat.shape[0], self._iters))
         lu, piv = lu_factor(self.A_reconstructed)
-        self.solutions = lu_solve((lu, piv), self._b_mat)
+        for i in range(self._iters):
+            self.solutions[:, i] = np.reshape(lu_solve((lu, piv), self._b_mat[:, i]), (-1,))
+        self._solved = True
+
+    def pinv_fit(self):
+        self.solutions = np.linalg.pinv(self.A_reconstructed) @ self._b_mat
         self._solved = True
 
     def _compute_errs(self) -> None:
         if self._solved:
-            err_sq = np.apply_along_axis(np.linalg.norm, self._b_mat - (self._A @ self.solutions), axis=0, ord=2)**2
-            self._errs = err_sq / np.apply_along_axis(np.linalg.norm, self._b_mat, axis=0, ord=2)**2
+            err_sq = np.apply_along_axis(np.linalg.norm, 0, self._b_mat - (self._A @ self.solutions), ord=2)**2
+            self._errs = err_sq / np.apply_along_axis(np.linalg.norm, 0, self._b_mat, ord=2)**2
         else:
             raise Exception("The simulator has not solved for x.")
 
     def _gen_output_mat(self) -> None:
-        self.b_mat[:, 0] = self.out_bitgen_method(size=self.b_mat.shape[0])
-        self.b_mat = np.repeat(self.b_mat[:, 0], self.b_mat.shape[1], axis=1)
-        self.b_mat = self.b_mat + self.eps_bitgen_method(size=self.b_mat.shape)
+        self._b_mat = np.zeros((self._A.shape[0],))
+        self._b_mat[:] = self._out_bitgen_method(size=(self._b_mat.shape[0],))
+        self._b_mat = np.repeat(self._b_mat[:, np.newaxis], self._iters, axis=1)
+        self._b_mat = self._b_mat + self._eps_bitgen_method(size=self._b_mat.shape)
 
     def _plot_error_distribution(self, **kwargs):
         if self._solved:
+            print(self._errs.shape)
             return plt.hist(self._errs, **kwargs)
         else:
             raise Exception("The simulator has not solved for x.")
@@ -97,7 +108,8 @@ class SVDErrorSimulator:
         self._U = Q @ UY
 
     def _snapshot_svd(self) -> None:
-        S, V = np.linalg.eigh(self.A)
-        self._U = self._A @ V @ np.linalg.inv(np.diag(S))
-        self._S, self._VT = np.sqrt(S), V.T
+        S, V = np.linalg.eigh(self._A.T @ self._A)
+        idx = np.argsort(S)[::-1]
+        self._U = self._A @ V[:, idx] @ np.linalg.inv(np.diag(np.sqrt(S[::-1])))
+        self._S, self._VT = np.sqrt(S[::-1]), V.T[:, idx]
 
