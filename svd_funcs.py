@@ -1,10 +1,17 @@
 import math
 import numpy as np
+import scipy as sp
 
 
 def truncation_coef(n: float, m: float, gamma: float = 1) -> float:
     beta = float(m)/float(n)
     return (2*(beta + 1) + ((8*beta)/(beta + 1) + math.sqrt(beta**2 + 14*beta + 1)))*math.sqrt(n)*gamma
+
+def is_diag(S):
+    i, j = S.shape
+    assert i == j
+    test = S.reshape(-1)[:-1].reshape(i-1, j+1)
+    return ~np.any(test[:, 1:])
 
 
 def rSVD(X, r, q, p):
@@ -34,3 +41,13 @@ def rSVD(X, r, q, p):
     U = Q @ UY
 
     return U, S, VT
+
+
+def svd_solve(U: np.ndarray, S: np.ndarray, VT: np.ndarray, b, r: int = None, *args, **kwargs):
+    if not r:
+        r = U.shape[0]
+    if not is_diag(S):
+        S = np.diag(S)
+    return sp.linalg.solve(U[:, :(1+r)] @ S[:(r+1), :(r+1)] @ VT[:(r+1), :], b, *args, **kwargs)
+
+def iterative_lu_solve()

@@ -62,3 +62,15 @@ def plot_reconstruction_metrics_vs_rank(X: np.ndarray):
     ax[2].set_ylabel("Cumulative Sum")
     ax[2].axhline(y=0.99)
     ax[2].set_ylim([0.7, 1])
+
+
+def plot_error_distributions(num_plots_per_row: int = 1, labels: list = [], *args, **kwargs):
+    num_rows = 1 + len(args)
+    fig, axs = plt.subplots(nrows=num_rows, ncols=num_plots_per_row)
+    for i in range(num_rows, step=2):
+        for j in range(num_plots_per_row):
+            axs[i, j].hist(args[i], label=labels[i], **kwargs)
+            axs[i, j].hist(args[i+1], label=labels[i+1], **kwargs)
+            axs[i, j].legend()
+    plt.show()
+
