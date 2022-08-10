@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -38,7 +38,7 @@ class SVDErrorSimulator:
         self._solved = False
         self.solutions = None
         self._out_bitgen_method = out_bitgen_method if out_bitgen_method else None
-        self._eps_bitgen_method = eps_bitgen_method if eps_bitgen_method else self.out_bitgen_method
+        self._eps_bitgen_method = eps_bitgen_method if eps_bitgen_method else None
 
     def simulate(self, method: str = "lu", **kwargs):
         self._gen_output_mat()
@@ -50,6 +50,32 @@ class SVDErrorSimulator:
             raise ValueError("User did not choose valid fitting method.")
         self._compute_errs()
         self._plot_error_distribution(**kwargs)
+
+    def plot_svd_dist(self,
+                      is_simulation: bool = False,
+                      cutoff: bool = False,
+                      matrix_gen_func: Optional[Callable] = None,
+                      size: Optional[Union[int, tuple]] = (100, 100),
+                      iters: Optional[int] = 100,
+                      sigma_known: bool = False,
+                      **kwargs) -> None:
+        shape = size if not is_simulation else self._A.shape
+        if is_simulation:
+            singular_values = np.ones(shape=(np.min(shape), iters))
+            cutoffs = np.ones(iters)
+            for i in range(iters):
+                a = matrix_gen_func(size=size)
+                singular_values[:, i] = np.sqrt(np.linalg.eigvalsh(a.T @ a)[::-1])
+            singular_values = singular_values.flatten()
+            plt.hist(singular_values, **kwargs)
+            plt.show()
+        else:
+            singular_values = self._S
+            plt.hist(singular_values, **kwargs)
+            if cutoff:
+                cutoff = self._compute_cutoff(sigma_known=sigma_known)
+                plt.axhline(y=cutoff, color="red")
+            plt.show()
 
     def lu_fit(self) -> None:
         self.solutions = np.zeros((self._b_mat.shape[0], self._iters))
@@ -68,6 +94,15 @@ class SVDErrorSimulator:
             self._errs = err_sq / np.apply_along_axis(np.linalg.norm, 0, self._b_mat, ord=2)**2
         else:
             raise Exception("The simulator has not solved for x.")
+
+    def _compute_cutoff(self, sigma_known: bool = False, sigma: Optional[Union[int, float]] = None) -> float:
+        self._compute_thresh_sigma_known(sigma) if sigma_known else self._compute_thresh_sigma_unkown()
+
+    def _compute_thresh_sigma_known(self, sigma: float = 1.0):
+        raise NotImplementedError
+
+    def _compute_thresh_sigma_unknown(self):
+        raise NotImplementedError
 
     def _gen_output_mat(self) -> None:
         self._b_mat = np.zeros((self._A.shape[0],))

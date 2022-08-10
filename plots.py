@@ -1,5 +1,10 @@
+from typing import Callable, Union, Optional
+
 import numpy as np
 import matplotlib.pyplot as plt
+
+
+
 
 
 def plot_distance_from_identity(u: np.ndarray, relative: bool = True) -> None:
